@@ -7,7 +7,6 @@ import ru.practicum.moviehub.store.MoviesStore;
 
 import java.io.IOException;
 import java.time.Year;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -73,7 +72,7 @@ public class MoviesHandler extends BaseHttpHandler {
     private void handlePost(HttpExchange exchange) throws IOException {
         String contentType = exchange.getRequestHeaders().getFirst("Content-Type");
         if (contentType == null || !contentType.contains("application/json")) {
-            sendResponse(exchange, 415, "Unsupported Media Type");
+            sendResponse(exchange, 415, "Неподдерживаемый тип");
             return;
         }
         String body = readText(exchange);

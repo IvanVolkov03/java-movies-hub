@@ -118,7 +118,7 @@ class MoviesApiTest {
     void postMovie_wrongContentType_returnsError() throws Exception {
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(BASE_URL))
-                .header("Content-Type", "text/plain") // Сервер вернет 415
+                .header("Content-Type", "text/plain")
                 .POST(HttpRequest.BodyPublishers.ofString("{}"))
                 .build();
         HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
