@@ -25,18 +25,32 @@ public class MoviesHandler extends BaseHttpHandler {
         String query = exchange.getRequestURI().getQuery();
 
         try {
-            if (method.equals("GET")) {
-                if (path.equals("/movies")) {
-                    handleGetAll(exchange, query);
-                } else if (path.startsWith("/movies/")) {
-                    handleGetById(exchange, path);
-                }
-            } else if (method.equals("POST") && path.equals("/movies")) {
-                handlePost(exchange);
-            } else if (method.equals("DELETE") && path.startsWith("/movies/")) {
-                handleDelete(exchange, path);
-            } else {
-                sendResponse(exchange, 405, "Метод не поддерживается");
+            switch (method) {
+                case "GET":
+                    if (path.equals("/movies")) {
+                        handleGetAll(exchange, query);
+                    } else if (path.startsWith("/movies/")) {
+                        handleGetById(exchange, path);
+                    } else {
+                        sendResponse(exchange, 404, "Путь не найден");
+                    }
+                    break;
+                case "POST":
+                    if (path.equals("/movies")) {
+                        handlePost(exchange);
+                    } else {
+                        sendResponse(exchange, 404, "Путь не найден");
+                    }
+                    break;
+                case "DELETE":
+                    if (path.startsWith("/movies/")) {
+                        handleDelete(exchange, path);
+                    } else {
+                        sendResponse(exchange, 404, "Путь не найден");
+                    }
+                    break;
+                default:
+                    sendResponse(exchange, 405, "Метод не поддерживается");
             }
         } catch (Exception e) {
             sendResponse(exchange, 500, "Ошибка сервера");
@@ -46,53 +60,63 @@ public class MoviesHandler extends BaseHttpHandler {
     }
 
     private void handleGetAll(HttpExchange exchange, String query) throws IOException {
-        if (query != null && query.contains("year=")) {
-            try {
-                int year = Integer.parseInt(query.split("year=")[1].split("&")[0]);
-                sendJsonResponse(exchange, 200, store.getByYear(year));
-            } catch (Exception e) {
-                sendResponse(exchange, 400, "Некорректный параметр запроса — 'year'");
-            }
-        } else {
-            sendJsonResponse(exchange, 200, store.getAll());
+        try {
+            Object responseData = (query != null && query.contains("year="))
+                    ? store.getByYear(Integer.parseInt(query.split("year=")[1].split("&")[0]))
+                    : store.getAll();
+            sendJsonResponse(exchange, 200, responseData);
+        } catch (Exception e) {
+            sendResponse(exchange, 400, "Некорректный параметр запроса — 'year'");
         }
     }
 
     private void handlePost(HttpExchange exchange) throws IOException {
         String contentType = exchange.getRequestHeaders().getFirst("Content-Type");
         if (contentType == null || !contentType.contains("application/json")) {
-            sendResponse(exchange, 415, "Неподдерживаемый тип");
+            sendResponse(exchange, 415, "Unsupported Media Type");
+            return;
+        }
+        String body = readText(exchange);
+        Movie movie;
+        try {
+            movie = gson.fromJson(body, Movie.class);
+        } catch (Exception e) {
+            sendJsonResponse(exchange, 422, new ErrorResponse("Ошибка валидации", List.of("Некорректный синтаксис JSON")));
             return;
         }
 
-        String body = readText(exchange);
-        try {
-            Movie movie = gson.fromJson(body, Movie.class);
-            List<String> errors = validateMovie(movie);
+        // Автоматическая проверка @NotNull (id и title)
+        List<String> errors = validate(movie);
 
-            if (!errors.isEmpty()) {
-                sendJsonResponse(exchange, 422, new ErrorResponse("Ошибка валидации", errors));
-                return;
+        // Дополнительные проверки
+        if (movie != null) {
+            if (movie.getTitle() != null && movie.getTitle().length() > 100) {
+                errors.add("Поле 'title': длина > 100");
             }
-
-            Movie created = store.add(movie);
-            sendJsonResponse(exchange, 201, created);
-
-        } catch (com.google.gson.JsonSyntaxException e) {
-            List<String> errors = List.of("Некорректный синтаксис JSON: " + e.getMessage());
-            sendJsonResponse(exchange, 422, new ErrorResponse("Ошибка валидации", errors));
+            if (movie.getYear() != 0) {
+                int currentYear = Year.now().getValue();
+                if (movie.getYear() < 1888 || movie.getYear() > currentYear + 1) {
+                    errors.add("Поле 'year': вне диапазона");
+                }
+            }
         }
+        if (!errors.isEmpty()) {
+            sendJsonResponse(exchange, 422, new ErrorResponse("Ошибка валидации", errors));
+            return;
+        }
+        sendJsonResponse(exchange, 201, movie);
     }
 
+
     private void handleGetById(HttpExchange exchange, String path) throws IOException {
-        String idPart = path.substring("/movies/".length());
         try {
-            int id = Integer.parseInt(idPart);
+            int id = Integer.parseInt(path.substring("/movies/".length()));
             Optional<Movie> movie = store.getById(id);
-            if (movie.isPresent()) {
-                sendJsonResponse(exchange, 200, movie.get());
+            int status = movie.isPresent() ? 200 : 404;
+            if (status == 200) {
+                sendJsonResponse(exchange, status, movie.get());
             } else {
-                sendResponse(exchange, 404, "Фильм не найден");
+                sendResponse(exchange, status, "Фильм не найден");
             }
         } catch (NumberFormatException e) {
             sendResponse(exchange, 400, "Некорректный ID");
@@ -111,23 +135,5 @@ public class MoviesHandler extends BaseHttpHandler {
         } catch (NumberFormatException e) {
             sendResponse(exchange, 400, "Некорректный ID");
         }
-    }
-
-    private List<String> validateMovie(Movie movie) {
-        List<String> errors = new ArrayList<>();
-        if (movie == null) {
-            errors.add("тело запроса не может быть пустым");
-            return errors;
-        }
-
-        if (movie.getTitle() == null || movie.getTitle().isBlank() || movie.getTitle().length() > 100) {
-            errors.add("название не должно быть пустым, длина ≤ 100 символов");
-        }
-
-        int currentYear = Year.now().getValue();
-        if (movie.getYear() < 1888 || movie.getYear() > currentYear + 1) {
-            errors.add("год должен быть между 1888 и " + (currentYear + 1));
-        }
-        return errors;
     }
 }

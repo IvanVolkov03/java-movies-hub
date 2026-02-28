@@ -1,7 +1,13 @@
 package ru.practicum.moviehub.http;
 
 import com.google.gson.Gson;
-import org.junit.jupiter.api.*;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
 import ru.practicum.moviehub.model.Movie;
 import ru.practicum.moviehub.store.MoviesStore;
 
@@ -68,7 +74,7 @@ class MoviesApiTest {
     @Test
     @DisplayName("3. POST /movies: корректные данные")
     void postMovie_valid_returnsOk() throws Exception {
-        String json = "{\"title\": \"Начало\", \"year\": 1999}";
+        String json = "{\"id\": 1, \"title\": \"Начало\", \"year\": 1999}";
         HttpResponse<String> response = sendPost(BASE_URL, json);
         assertEquals(201, response.statusCode());
     }
@@ -112,7 +118,7 @@ class MoviesApiTest {
     void postMovie_wrongContentType_returnsError() throws Exception {
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(BASE_URL))
-                .header("Content-Type", "text/plain")
+                .header("Content-Type", "text/plain") // Сервер вернет 415
                 .POST(HttpRequest.BodyPublishers.ofString("{}"))
                 .build();
         HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
@@ -122,16 +128,13 @@ class MoviesApiTest {
     @Test
     @DisplayName("9. POST /movies: ошибка кривой JSON")
     void postMovie_badJson_returnsError() throws Exception {
-        String json = "{\"title\": \"Fail\", \"year\": "; // некорректный синтаксис (нет значения и закрывающей скобки)
-
+        String json = "{\"title\": \"Fail\", \"year\": ";
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(BASE_URL))
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(json))
                 .build();
-
         HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-
         assertEquals(422, response.statusCode());
         assertTrue(response.body().contains("Ошибка валидации"));
     }

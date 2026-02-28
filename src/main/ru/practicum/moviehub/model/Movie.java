@@ -1,9 +1,13 @@
 package ru.practicum.moviehub.model;
 
 public class Movie {
+    @NotNull
     private Integer id;
+
+    @NotNull
     private String title;
-    private  int year;
+
+    private int year;
 
     public Movie(Integer id, String title, int year) {
         this.id = id;

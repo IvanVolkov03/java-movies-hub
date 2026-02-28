@@ -2,10 +2,15 @@ package ru.practicum.moviehub.http;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.google.gson.Gson;
+import ru.practicum.moviehub.model.NotNull;
 
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+
+import java.lang.reflect.Field;
+import java.util.List;
+import java.util.ArrayList;
 
 public abstract class BaseHttpHandler implements HttpHandler {
     protected final Gson gson = new Gson();
@@ -36,4 +41,27 @@ public abstract class BaseHttpHandler implements HttpHandler {
         return new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
     }
 
+    // Новый метод работы с аннотациями
+    protected List<String> validate(Object obj) {
+        List<String> errors = new ArrayList<>();
+        if (obj == null) {
+            errors.add("Тело запроса пустое");
+            return errors;
+        }
+        Field[] fields = obj.getClass().getDeclaredFields();
+        for (Field field : fields) {
+            if (field.isAnnotationPresent(NotNull.class)) {
+                field.setAccessible(true);
+                try {
+                    Object value = field.get(obj);
+                    if (value == null || (value instanceof String && ((String) value).isBlank())) {
+                        errors.add("Поле '" + field.getName() + "' обязательно для заполнения");
+                    }
+                } catch (IllegalAccessException e) {
+                    errors.add("Ошибка доступа к полю: " + field.getName());
+                }
+            }
+        }
+        return errors;
+    }
 }
